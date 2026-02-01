@@ -83,7 +83,7 @@ AI-Film-Studio/
 
 Open this repository in GitHub Codespaces for a pre-configured development environment:
 
-[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://github.com/codespaces/new?hide_repo_select=true&ref=main&repo=AI-Cloud-Tech-Inc/AI-Film-Studio)
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new?hide_repo_select=true&ref=main)
 
 The Codespace will automatically:
 - Configure git authentication for commits and pushes
