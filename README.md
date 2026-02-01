@@ -53,7 +53,10 @@ Meet the autonomous AI agents that create your films:
 - Integrates CGI elements seamlessly
 - Ensures technical quality
 
-👉 **Learn more**: [Agent Architecture](./AGENT_ARCHITECTURE.md)human micromanagement
+👉 **Learn more**: [Agent Architecture](./AGENT_ARCHITECTURE.md)
+
+## 🔄 Autonomous Operation
+- **❌ No Human Micromanagement**: Agents operate autonomously without constant human intervention
 - **📈 Continuous Learning**: System improves from every film produced
 
 ## ✨ Features
