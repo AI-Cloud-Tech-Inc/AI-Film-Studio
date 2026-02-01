@@ -6,8 +6,12 @@ echo "Setting up AI Film Studio development environment..."
 if [ -n "$CODESPACE_NAME" ]; then
     echo "Detected GitHub Codespace environment"
     
-    # Configure git to use GitHub CLI credential helper
-    git config --global credential.helper ""
+    # Remove any existing credential helpers (both local and global)
+    git config --global --unset-all credential.helper 2>/dev/null || true
+    git config --local --unset-all credential.helper 2>/dev/null || true
+    git config --local --unset credential.username 2>/dev/null || true
+    
+    # Configure git to use GitHub CLI credential helper globally
     git config --global credential.helper "!/usr/bin/gh auth git-credential"
     
     echo "Git authentication configured to use GitHub CLI"
