@@ -1,11 +1,60 @@
-# 🎬 AI Film Studio
+# 🎬 Autonomous Agentic AI Film Studio
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-3.11+-blue.svg)](https://www.python.org/downloads/)
 [![Next.js](https://img.shields.io/badge/next.js-14-black.svg)](https://nextjs.org/)
 [![FastAPI](https://img.shields.io/badge/fastapi-0.109-green.svg)](https://fastapi.tiangolo.com/)
 
-AI Film Studio is a cloud-based AI platform that automates end-to-end video production, from scriptwriting and storyboarding to scene generation, voiceovers, and editing. It enables creators to produce professional, multi-format videos faster, cheaper, and at scale using AI-powered tools.
+**The world's first fully autonomous AI film studio powered by collaborative AI agents.**
+
+AI 🤖 The Agent Crew
+
+Meet the autonomous AI agents that create your films:
+
+### 🎭 Director Agent
+**The Creative Visionary**
+- Interprets your concept into a cohesive creative vision
+- Makes high-level artistic decisions autonomously
+- Coordinates all other agents like a real film director
+- Reviews and approves final output
+
+### ✍️ Screenwriter Agent
+**The Storyteller**
+- Writes complete scripts with dialogue and scene descriptions
+- Develops character arcs and narrative structure
+- Revises based on director feedback autonomously
+- Maintains narrative consistency
+
+### 🎥 Cinematographer Agent
+**The Visual Artist**
+- Plans camera angles, movements, and compositions
+- Determines lighting and visual style
+- Creates detailed shot lists
+- Ensures visual continuity across scenes
+
+### ✂️ Editor Agent
+**The Pacing Expert**
+- Assembles scenes into cohesive narrative
+- Determines optimal timing and rhythm
+- Applies transitions intelligently
+- Makes autonomous cut decisions
+
+### 🎵 Sound Designer Agent
+**The Audio Architect**
+- Selects or generates background music
+- Creates immersive soundscapes
+- Mixes audio levels autonomously
+- Synchronizes sound with visual beats
+
+### ✨ VFX Agent
+**The Enhancement Specialist**
+- Identifies enhancement opportunities
+- Applies visual effects and color grading
+- Integrates CGI elements seamlessly
+- Ensures technical quality
+
+👉 **Learn more**: [Agent Architecture](./AGENT_ARCHITECTURE.md)human micromanagement
+- **📈 Continuous Learning**: System improves from every film produced
 
 ## ✨ Features
 
