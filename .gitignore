@@ -58,11 +58,21 @@ logs/
 # Database
 *.db
 *.sqlite
+*.sqlite3
+db.sqlite3
 
-# Media files (temporary)
+# Media files (temporary and large)
 temp_media/
 uploads/
 output/
+storage/videos/
+storage/temp/
+storage/cache/
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.webm
 
 # API Keys and Secrets
 secrets/
@@ -76,3 +86,12 @@ docker-compose.override.yml
 .pytest_cache/
 .coverage
 htmlcov/
+coverage/
+
+# AI Models (download separately)
+ai-models/checkpoints/
+ai-models/weights/
+ai-models/cache/
+models/*.pth
+models/*.safetensors
+models/*.ckpt
