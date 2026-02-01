@@ -1,8 +1,11 @@
-/** @type {import('next').NextConfig} */
+﻿/** @type {import('next').NextConfig} */
 const nextConfig = {
-  env: {
-    NEXT_PUBLIC_API_URL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000',
+  output: 'export',
+  basePath: '/AI-Film-Studio',
+  images: {
+    unoptimized: true,
   },
+  trailingSlash: true,
 }
 
 module.exports = nextConfig
