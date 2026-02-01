@@ -79,7 +79,20 @@ AI-Film-Studio/
 - Docker & Docker Compose (optional)
 - CUDA-capable GPU (recommended)
 
-### Installation
+### GitHub Codespaces (Recommended)
+
+Open this repository in GitHub Codespaces for a pre-configured development environment:
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://github.com/codespaces/new?hide_repo_select=true&ref=main&repo=AI-Cloud-Tech-Inc/AI-Film-Studio)
+
+The Codespace will automatically:
+- Configure git authentication for commits and pushes
+- Install all dependencies
+- Set up the development environment
+
+See [CODESPACE_SETUP.md](./CODESPACE_SETUP.md) for more details.
+
+### Local Installation
 
 1. **Clone the repository**
 ```bash
