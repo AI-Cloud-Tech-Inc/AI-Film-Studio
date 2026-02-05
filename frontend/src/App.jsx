@@ -1,7 +1,7 @@
 import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
 import { useState } from 'react';
-import Dashboard from './pages/Dashboard';
-import FilmCreator from './pages/FilmCreator';
+import Dashboard from './routes/Dashboard';
+import FilmCreator from './routes/FilmCreator';
 import './App.css';
 
 function App() {
