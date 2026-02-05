@@ -89,6 +89,21 @@ docker-compose up -d
 # Backend API: http://localhost:8000/docs
 ```
 
+### Using GitHub Codespaces
+
+This repository is fully configured for GitHub Codespaces with automatic setup:
+
+1. **Create a Codespace** from the repository
+2. **Wait for automatic setup** - The devcontainer will:
+   - Configure git authentication using GitHub CLI
+   - Install Python and Node.js dependencies
+   - Set up the development environment
+3. **Start developing** - All git operations (commit, push, pull) work automatically!
+
+**Git authentication is pre-configured** - no manual setup needed!
+
+📖 For troubleshooting or manual setup: [CODESPACE_SETUP.md](./CODESPACE_SETUP.md)
+
 ## 📚 Documentation
 
 - **[Getting Started Guide](docs/GETTING_STARTED.md)** - Detailed setup instructions
