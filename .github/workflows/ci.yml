@@ -6,10 +6,16 @@ on:
   pull_request:
     branches: [ main, develop ]
 
+permissions:
+  contents: read
+
 jobs:
   backend-tests:
     name: Backend Tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: write
     
     services:
       postgres:
@@ -76,6 +82,8 @@ jobs:
   frontend-tests:
     name: Frontend Tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     
     steps:
     - uses: actions/checkout@v3
@@ -105,6 +113,8 @@ jobs:
   docker-build:
     name: Docker Build
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     
     steps:
     - uses: actions/checkout@v3
