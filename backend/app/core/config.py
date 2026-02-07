@@ -13,16 +13,16 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     DEBUG: bool = True
     API_VERSION: str = "v1"
-    SECRET_KEY: str
+    SECRET_KEY: str = "your-secret-key-here-change-in-production"
     
     # Database
-    DATABASE_URL: str
+    DATABASE_URL: str = "sqlite:///./ai_film_studio.db"
     
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"
     
     # AI Services
-    OPENAI_API_KEY: str
+    OPENAI_API_KEY: str = ""
     ANTHROPIC_API_KEY: str = ""
     STABILITY_API_KEY: str = ""
     ELEVENLABS_API_KEY: str = ""

@@ -89,10 +89,29 @@ docker-compose up -d
 # Backend API: http://localhost:8000/docs
 ```
 
+### Using Setup Script
+
+```bash
+# Clone the repository
+git clone https://github.com/AI-Cloud-Tech-Inc/AI-Film-Studio.git
+cd AI-Film-Studio
+
+# Run automated setup
+./setup.sh
+
+# Add your API keys to backend/.env
+
+# Start development servers
+npm run dev
+```
+
 ## 📚 Documentation
 
-- **[Getting Started Guide](docs/GETTING_STARTED.md)** - Detailed setup instructions
-- **[Architecture Overview](docs/ARCHITECTURE.md)** - System design and components
+- **[Quick Start Guide](QUICKSTART.md)** - Get started in minutes
+- **[Project Structure](PROJECT_STRUCTURE.md)** - Understand the codebase
+- **[Contributing Guide](CONTRIBUTING.md)** - How to contribute
+- **[Development Guide](DEVELOPMENT.md)** - Detailed development instructions
+- **[Agent Architecture](AGENT_ARCHITECTURE.md)** - AI agent system design
 - **[API Documentation](http://localhost:8000/docs)** - Interactive API docs (after starting backend)
 
 ## 🛠️ Technology Stack
