@@ -15,11 +15,18 @@ class ProjectStatus(str, Enum):
     FAILED = "failed"
 
 
+class VideoFormat(str, Enum):
+    """Video format enum"""
+    LANDSCAPE = "landscape"
+    PORTRAIT = "portrait"
+    SQUARE = "square"
+
+
 class ProjectBase(BaseModel):
     """Base project schema"""
     title: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
-    video_format: str = Field(default="landscape", pattern="^(landscape|portrait|square)$")
+    video_format: VideoFormat = VideoFormat.LANDSCAPE
     duration: Optional[str] = None
 
 
@@ -33,7 +40,7 @@ class ProjectUpdate(BaseModel):
     title: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
     status: Optional[ProjectStatus] = None
-    video_format: Optional[str] = Field(None, pattern="^(landscape|portrait|square)$")
+    video_format: Optional[VideoFormat] = None
     duration: Optional[str] = None
     output_url: Optional[str] = None
 

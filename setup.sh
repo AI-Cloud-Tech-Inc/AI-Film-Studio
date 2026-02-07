@@ -2,6 +2,9 @@
 
 # AI Film Studio - Setup Script
 # This script sets up the development environment
+# 
+# Note: Windows users should use setup.ps1 or manually follow QUICKSTART.md
+# On Windows with Git Bash, you may need to adjust the venv activation path
 
 set -e
 
@@ -33,7 +36,8 @@ if [ ! -d "venv" ]; then
     echo "✅ Created Python virtual environment"
 fi
 
-# Activate virtual environment
+# Activate virtual environment (Linux/Mac)
+# Windows users: use venv\Scripts\activate instead
 source venv/bin/activate
 
 # Install Python dependencies

@@ -4,6 +4,10 @@ Utility functions
 import hashlib
 import secrets
 from typing import Optional
+from passlib.context import CryptContext
+
+# Password hashing context using bcrypt
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def generate_random_string(length: int = 32) -> str:
@@ -12,13 +16,13 @@ def generate_random_string(length: int = 32) -> str:
 
 
 def hash_password(password: str) -> str:
-    """Hash a password using SHA-256"""
-    return hashlib.sha256(password.encode()).hexdigest()
+    """Hash a password using bcrypt"""
+    return pwd_context.hash(password)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """Verify a password against its hash"""
-    return hash_password(plain_password) == hashed_password
+    return pwd_context.verify(plain_password, hashed_password)
 
 
 def sanitize_filename(filename: str) -> str:

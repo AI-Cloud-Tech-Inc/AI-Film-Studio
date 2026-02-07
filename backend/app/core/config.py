@@ -3,6 +3,13 @@ Application Configuration
 """
 from pydantic_settings import BaseSettings
 from typing import List
+import secrets
+import os
+
+
+def generate_secret_key() -> str:
+    """Generate a secure random secret key"""
+    return secrets.token_urlsafe(32)
 
 
 class Settings(BaseSettings):
@@ -13,7 +20,7 @@ class Settings(BaseSettings):
     APP_ENV: str = "development"
     DEBUG: bool = True
     API_VERSION: str = "v1"
-    SECRET_KEY: str = "your-secret-key-here-change-in-production"
+    SECRET_KEY: str = os.getenv("SECRET_KEY", generate_secret_key())
     
     # Database
     DATABASE_URL: str = "sqlite:///./ai_film_studio.db"
@@ -45,3 +52,11 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+
+# Validate production settings
+if settings.APP_ENV == "production":
+    if settings.SECRET_KEY == generate_secret_key() or len(settings.SECRET_KEY) < 32:
+        raise ValueError(
+            "SECRET_KEY must be set to a secure random value in production. "
+            "Generate one using: python -c 'import secrets; print(secrets.token_urlsafe(32))'"
+        )
