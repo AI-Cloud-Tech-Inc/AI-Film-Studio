@@ -27,34 +27,44 @@ class AIGenerator:
             self.anthropic_client = AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
             logger.info("Anthropic client initialized")
     
+    # Map legacy/display model names to current Anthropic model IDs
+    MODEL_ALIASES: Dict[str, str] = {
+        "claude-3-opus": "claude-opus-4-6",
+        "claude-3-sonnet": "claude-sonnet-4-6",
+        "claude-3-haiku": "claude-haiku-4-5",
+        "claude-opus": "claude-opus-4-6",
+        "claude-sonnet": "claude-sonnet-4-6",
+    }
+
     async def generate_text(
         self,
         prompt: str,
         system_prompt: Optional[str] = None,
-        model: str = "gpt-4",
-        max_tokens: int = 2000,
+        model: str = "claude-opus-4-6",
+        max_tokens: int = 16000,
         temperature: float = 0.7
     ) -> str:
         """
         Generate text using specified AI model
-        
+
         Args:
             prompt: User prompt
             system_prompt: System instruction
-            model: Model to use (gpt-4, claude-3-opus, etc.)
+            model: Model to use (claude-opus-4-6, gpt-4, etc.)
             max_tokens: Maximum response tokens
             temperature: Creativity level (0-1)
-            
+
         Returns:
             Generated text content
         """
+        resolved_model = self.MODEL_ALIASES.get(model, model)
         try:
-            if model.startswith("gpt") and self.openai_client:
-                return await self._generate_openai(prompt, system_prompt, model, max_tokens, temperature)
-            elif model.startswith("claude") and self.anthropic_client:
-                return await self._generate_anthropic(prompt, system_prompt, model, max_tokens, temperature)
+            if resolved_model.startswith("gpt") and self.openai_client:
+                return await self._generate_openai(prompt, system_prompt, resolved_model, max_tokens, temperature)
+            elif resolved_model.startswith("claude") and self.anthropic_client:
+                return await self._generate_anthropic(prompt, system_prompt, resolved_model, max_tokens, temperature)
             else:
-                logger.warning(f"Model {model} not available, using fallback")
+                logger.warning(f"Model {resolved_model} not available, using fallback")
                 return self._generate_fallback(prompt)
         except Exception as e:
             logger.error(f"Error generating text: {str(e)}")
@@ -97,12 +107,14 @@ class AIGenerator:
         response = await self.anthropic_client.messages.create(
             model=model,
             max_tokens=max_tokens,
-            temperature=temperature,
-            system=system_prompt or "You are a helpful AI assistant.",
+            system=system_prompt or "You are a helpful AI assistant for film production.",
             messages=[{"role": "user", "content": prompt}]
         )
-        
-        return response.content[0].text
+
+        for block in response.content:
+            if block.type == "text":
+                return block.text
+        return self._generate_fallback(prompt)
     
     def _generate_fallback(self, prompt: str) -> str:
         """Fallback generation when APIs are unavailable"""
