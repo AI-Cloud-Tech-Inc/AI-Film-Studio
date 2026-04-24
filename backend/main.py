@@ -3,11 +3,26 @@ AI Film Studio - Main Application Entry Point
 """
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from contextlib import asynccontextmanager
 import uvicorn
+import logging
 
 from app.core.config import settings
 from app.api.v1.router import api_router
+from app.middleware import (
+    http_exception_handler,
+    validation_exception_handler,
+    general_exception_handler,
+    LoggingMiddleware,
+)
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 
 
 @asynccontextmanager
@@ -35,6 +50,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Logging Middleware
+app.add_middleware(LoggingMiddleware)
+
+# Exception Handlers
+app.add_exception_handler(StarletteHTTPException, http_exception_handler)
+app.add_exception_handler(RequestValidationError, validation_exception_handler)
+app.add_exception_handler(Exception, general_exception_handler)
 
 # Include API routes
 app.include_router(api_router, prefix=f"/api/{settings.API_VERSION}")

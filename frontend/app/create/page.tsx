@@ -8,7 +8,7 @@ export default function CreateFilm() {
     prompt: '',
     style: 'cinematic',
     duration: 30,
-    model: 'gpt-4',
+    model: 'claude-opus-4-6',
   });
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<any>(null);
@@ -104,9 +104,10 @@ export default function CreateFilm() {
               disabled={loading}
               className="w-full p-3 bg-gray-700 border border-gray-600 rounded focus:border-indigo-500 focus:outline-none"
             >
+              <option value="claude-opus-4-6">Claude Opus 4.6 (Anthropic) — Most Powerful</option>
+              <option value="claude-sonnet-4-6">Claude Sonnet 4.6 (Anthropic) — Balanced</option>
+              <option value="claude-haiku-4-5">Claude Haiku 4.5 (Anthropic) — Fastest</option>
               <option value="gpt-4">GPT-4 (OpenAI)</option>
-              <option value="claude-3-opus">Claude 3 Opus (Anthropic)</option>
-              <option value="claude-3-sonnet">Claude 3 Sonnet (Anthropic)</option>
             </select>
           </div>
 
