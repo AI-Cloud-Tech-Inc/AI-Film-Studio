@@ -10,9 +10,9 @@ logger = logging.getLogger(__name__)
 
 class EditorAgent(BaseAgent):
     """Editor agent for video assembly and post-production"""
-    
-    def __init__(self, model: str = "gpt-4"):
-        super().__init__(name="Editor", model=model)
+
+    def __init__(self, model: str = "claude-opus-4-6", anthropic_api_key: str = ""):
+        super().__init__(name="Editor", model=model, anthropic_api_key=anthropic_api_key)
         self.transitions = ["fade", "cut", "dissolve", "wipe"]
     
     async def process(self, input_data: Dict[str, Any]) -> Dict[str, Any]:

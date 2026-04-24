@@ -17,6 +17,7 @@ from app.middleware import (
     general_exception_handler,
     LoggingMiddleware,
 )
+from app.database import create_tables
 
 # Configure logging
 logging.basicConfig(
@@ -29,10 +30,11 @@ logging.basicConfig(
 async def lifespan(app: FastAPI):
     """Application lifespan events"""
     # Startup
-    print(f"🎬 Starting {settings.APP_NAME}...")
+    print(f"Starting {settings.APP_NAME}...")
+    create_tables()
     yield
     # Shutdown
-    print("🛑 Shutting down AI Film Studio...")
+    print("Shutting down AI Film Studio...")
 
 
 app = FastAPI(
