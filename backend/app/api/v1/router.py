@@ -10,10 +10,14 @@ from app.api.v1.endpoints import (
     videos,
     projects
 )
+from app.api.routes import autonomous
 
 api_router = APIRouter()
 
-# Include endpoint routers
+# Autonomous film pipeline
+api_router.include_router(autonomous.router, prefix="/autonomous", tags=["Autonomous"])
+
+# Individual resource endpoints
 api_router.include_router(projects.router, prefix="/projects", tags=["Projects"])
 api_router.include_router(scripts.router, prefix="/scripts", tags=["Scripts"])
 api_router.include_router(storyboards.router, prefix="/storyboards", tags=["Storyboards"])

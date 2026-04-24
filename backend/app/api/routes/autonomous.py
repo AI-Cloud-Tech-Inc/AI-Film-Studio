@@ -1,219 +1,270 @@
 """
 Autonomous Film Creation API Routes
 """
-from fastapi import APIRouter, HTTPException, BackgroundTasks
-from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any
+import json
+import uuid
 import logging
+from typing import Optional, Dict, Any, List
+
+from fastapi import APIRouter, HTTPException, Depends
+from pydantic import BaseModel, Field
+from sqlalchemy import func
+from sqlalchemy.orm import Session, selectinload
+
 from app.agents.orchestrator import AgentOrchestrator
-from app.services.ai_generator import ai_generator
-from app.services.video_generator import video_generator
-from app.services.audio_generator import audio_generator
+from app.database import get_db
+from app.models.project import Project, Scene, Script, ProjectStatus
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Initialize orchestrator
-orchestrator = AgentOrchestrator()
+# Cache of orchestrators keyed by model name — avoids re-creating on every request
+# while still honouring per-request model selection.
+_orchestrators: Dict[str, AgentOrchestrator] = {}
 
+
+def _get_orchestrator(model: str) -> AgentOrchestrator:
+    if model not in _orchestrators:
+        from app.core.config import settings
+        _orchestrators[model] = AgentOrchestrator(
+            model=model,
+            anthropic_api_key=settings.ANTHROPIC_API_KEY,
+        )
+    return _orchestrators[model]
+
+
+# ---------------------------------------------------------------------------
+# Request / Response schemas
+# ---------------------------------------------------------------------------
 
 class FilmRequest(BaseModel):
-    """Film creation request"""
-    prompt: str = Field(..., description="Film concept/idea", min_length=10)
+    prompt: str = Field(..., min_length=10, description="Film concept / idea")
     style: str = Field(default="cinematic", description="Visual style")
-    duration: Optional[int] = Field(default=30, description="Target duration in seconds", ge=5, le=300)
-    voice_id: Optional[str] = Field(default=None, description="ElevenLabs voice ID")
-    music_style: Optional[str] = Field(default="cinematic orchestral", description="Music style")
-    model: str = Field(default="gpt-4", description="AI model for script generation")
+    duration: int = Field(default=30, ge=5, le=300, description="Target duration in seconds")
+    model: str = Field(default="claude-opus-4-6", description="Claude model to use")
 
 
 class FilmResponse(BaseModel):
-    """Film creation response"""
     status: str
-    film_id: str
+    project_id: str
     message: str
+    persisted: bool = True
     data: Optional[Dict[str, Any]] = None
 
 
-@router.post("/create-film", response_model=FilmResponse)
-async def create_autonomous_film(request: FilmRequest, background_tasks: BackgroundTasks):
-    """
-    Create a complete film autonomously from a text prompt
-    
-    This endpoint orchestrates all AI agents to:
-    1. Generate creative vision and scene breakdown (Director)
-    2. Write detailed script with dialogue (Screenwriter)
-    3. Generate video clips for each scene (Video Generator)
-    4. Generate voiceover and music (Audio Generator)
-    5. Assemble final film (Editor)
-    """
-    try:
-        logger.info(f"Starting autonomous film creation: {request.prompt[:50]}...")
-        
-        # Step 1: Orchestrate the complete workflow
-        result = await orchestrator.create_film(
-            user_prompt=request.prompt,
-            style=request.style
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _persist_project(db: Session, request: FilmRequest, result: Dict[str, Any]) -> Project:
+    """Save the completed film pipeline result to the database and return the Project."""
+    director_out = result.get("director", {})
+    script_out = result.get("script", {})
+    scenes_raw: List[Dict] = director_out.get("scenes", [])
+    script_scenes: List[Dict] = script_out.get("script_scenes", [])
+
+    project = Project(
+        id=str(uuid.uuid4()),
+        title=request.prompt[:120],
+        prompt=request.prompt,
+        style=request.style,
+        duration=request.duration,
+        model=request.model,
+        status=ProjectStatus.completed,
+        director_vision=director_out.get("vision", ""),
+    )
+    db.add(project)
+    db.flush()  # populate project.id before adding children
+
+    # Persist each scene
+    script_lookup = {s.get("scene_number"): s for s in script_scenes}
+    for scene_data in scenes_raw:
+        sn = scene_data.get("scene_number", 0)
+        script_scene = script_lookup.get(sn, {})
+        scene = Scene(
+            id=str(uuid.uuid4()),
+            project_id=project.id,
+            scene_number=sn,
+            description=scene_data.get("description", ""),
+            shot_type=scene_data.get("shot_type", "medium"),
+            mood=scene_data.get("mood", "neutral"),
+            duration=scene_data.get("duration", 10),
+            visual_prompt=scene_data.get("visual_prompt", ""),
+            narration=script_scene.get("narration", ""),
+            dialogue=script_scene.get("dialogue", []),
+            audio_cues=script_scene.get("audio_cues", []),
         )
-        
-        if result.get("status") == "error":
-            raise HTTPException(status_code=500, detail=result.get("error"))
-        
-        # Step 2: Generate media assets (video and audio)
-        scenes = result["director_vision"]["scenes"]
-        script_scenes = result["script"]["script_scenes"]
-        
-        # Generate video for each scene
-        video_tasks = []
-        for idx, scene in enumerate(scenes):
-            script = script_scenes[idx] if idx < len(script_scenes) else {}
-            video_prompt = f"{request.style}: {script.get('visual_description', scene.get('description'))}"
-            
-            video_result = await video_generator.generate_video_from_text(
-                prompt=video_prompt,
-                duration=scene.get("duration", 10),
-                style=request.style
-            )
-            video_tasks.append(video_result)
-        
-        # Generate audio for each scene
-        audio_tasks = []
-        for idx, script_scene in enumerate(script_scenes):
-            narration = script_scene.get("narration", "")
-            music_prompt = f"{request.music_style} for {script_scene.get('description', 'scene')}"
-            
-            audio_result = await audio_generator.generate_scene_audio(
-                narration_text=narration,
-                music_prompt=music_prompt,
-                duration=scenes[idx].get("duration", 10) if idx < len(scenes) else 10,
-                voice_id=request.voice_id
-            )
-            audio_tasks.append(audio_result)
-        
-        # Step 3: Assemble final film
-        assembly_result = await orchestrator.editor.process({
-            "scenes": scenes,
-            "video_clips": [v.get("video_url", "") for v in video_tasks],
-            "audio_files": [a.get("music_url", "") for a in audio_tasks]
-        })
-        
-        # Generate unique film ID
-        import uuid
-        film_id = str(uuid.uuid4())
-        
-        response_data = {
-            "film_id": film_id,
+        db.add(scene)
+
+    # Persist combined script as a single Script record
+    if script_scenes:
+        script = Script(
+            id=str(uuid.uuid4()),
+            project_id=project.id,
+            content=json.dumps(script_scenes),
+            scene_count=len(script_scenes),
+        )
+        db.add(script)
+
+    db.commit()
+    db.refresh(project)
+    return project
+
+
+# ---------------------------------------------------------------------------
+# Endpoints
+# ---------------------------------------------------------------------------
+
+@router.post("/create-film", response_model=FilmResponse)
+async def create_autonomous_film(request: FilmRequest, db: Session = Depends(get_db)):
+    """
+    Orchestrate the full autonomous film pipeline:
+    Director -> Screenwriter -> Cinematographer -> Sound Designer -> Editor
+    """
+    logger.info(f"Film creation started: {request.prompt[:60]}...")
+
+    orchestrator = _get_orchestrator(request.model)
+
+    result = await orchestrator.create_film(
+        user_prompt=request.prompt,
+        style=request.style,
+        duration=request.duration,
+    )
+
+    if result.get("status") == "error":
+        raise HTTPException(status_code=500, detail=result.get("error", "Unknown error"))
+
+    # Persist to DB; surface a clear flag rather than silently swallowing failures.
+    persisted = True
+    try:
+        project = _persist_project(db, request, result)
+        project_id = project.id
+    except Exception as exc:
+        logger.error(f"DB persistence failed: {exc}")
+        persisted = False
+        project_id = str(uuid.uuid4())
+
+    director_out = result.get("director", {})
+    scenes = director_out.get("scenes", [])
+
+    return FilmResponse(
+        status="success",
+        project_id=project_id,
+        persisted=persisted,
+        message=f"Film pipeline complete — {len(scenes)} scenes created"
+        + ("" if persisted else " (warning: DB persistence failed)"),
+        data={
+            "project_id": project_id,
             "prompt": request.prompt,
             "style": request.style,
-            "scenes": len(scenes),
+            "duration": request.duration,
+            "scene_count": len(scenes),
             "total_duration": sum(s.get("duration", 0) for s in scenes),
-            "director_vision": result["director_vision"],
-            "script": result["script"],
-            "video_assets": video_tasks,
-            "audio_assets": audio_tasks,
-            "timeline": assembly_result["timeline"],
-            "agents_used": ["Director", "Screenwriter", "Video Generator", "Audio Generator", "Editor"]
-        }
-        
-        logger.info(f"Film created successfully: {film_id}")
-        
-        return FilmResponse(
-            status="success",
-            film_id=film_id,
-            message=f"Film created successfully with {len(scenes)} scenes",
-            data=response_data
-        )
-    
-    except Exception as e:
-        logger.error(f"Error creating film: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+            "director": director_out,
+            "script": result.get("script", {}),
+            "cinematography": result.get("cinematography", {}),
+            "sound": result.get("sound", {}),
+            "media_assets": result.get("media_assets", {}),
+            "final_timeline": result.get("final_timeline", {}),
+            "workflow_steps": result.get("workflow_steps", []),
+        },
+    )
 
 
-@router.post("/generate-scene", response_model=Dict[str, Any])
-async def generate_single_scene(
-    prompt: str,
-    style: str = "cinematic",
-    duration: int = 10,
-    include_audio: bool = True,
-    voice_id: Optional[str] = None
-):
-    """
-    Generate a single scene with video and audio
-    """
-    try:
-        # Generate script using AI
-        script_prompt = f"""
-        Create a detailed scene description for: {prompt}
-        Style: {style}
-        Duration: {duration} seconds
-        
-        Include:
-        - Visual description
-        - Narration text
-        - Camera movement
-        - Mood and atmosphere
-        """
-        
-        script = await ai_generator.generate_text(
-            prompt=script_prompt,
-            system_prompt="You are a professional film screenwriter.",
-            max_tokens=500
-        )
-        
-        # Generate video
-        video_result = await video_generator.generate_video_from_text(
-            prompt=f"{style}: {prompt}",
-            duration=duration,
-            style=style
-        )
-        
-        # Generate audio if requested
-        audio_result = None
-        if include_audio:
-            audio_result = await audio_generator.generate_scene_audio(
-                narration_text=script,
-                music_prompt=f"{style} background music",
-                duration=duration,
-                voice_id=voice_id
-            )
-        
-        return {
-            "status": "success",
-            "script": script,
-            "video": video_result,
-            "audio": audio_result,
-            "duration": duration
+@router.get("/projects", response_model=List[Dict[str, Any]])
+def list_projects(skip: int = 0, limit: int = 20, db: Session = Depends(get_db)):
+    """List all film projects, newest first."""
+    # Use a COUNT subquery to avoid the N+1 per-project lazy-load.
+    scene_count_sq = (
+        db.query(func.count(Scene.id))
+        .filter(Scene.project_id == Project.id)
+        .correlate(Project)
+        .scalar_subquery()
+    )
+    rows = (
+        db.query(Project, scene_count_sq.label("scene_count"))
+        .order_by(Project.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "id": p.id,
+            "title": p.title,
+            "style": p.style,
+            "duration": p.duration,
+            "status": p.status,
+            "scene_count": count,
+            "created_at": p.created_at.isoformat(),
         }
-    
-    except Exception as e:
-        logger.error(f"Error generating scene: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        for p, count in rows
+    ]
+
+
+@router.get("/projects/{project_id}", response_model=Dict[str, Any])
+def get_project(project_id: str, db: Session = Depends(get_db)):
+    """Get a single project with all its scenes and script."""
+    project = (
+        db.query(Project)
+        .options(selectinload(Project.scenes), selectinload(Project.scripts))
+        .filter(Project.id == project_id)
+        .first()
+    )
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    script_content: List = []
+    if project.scripts:
+        try:
+            script_content = json.loads(project.scripts[0].content)
+        except Exception:
+            pass
+
+    return {
+        "id": project.id,
+        "title": project.title,
+        "prompt": project.prompt,
+        "style": project.style,
+        "duration": project.duration,
+        "model": project.model,
+        "status": project.status,
+        "director_vision": project.director_vision,
+        "created_at": project.created_at.isoformat(),
+        "scenes": [
+            {
+                "scene_number": s.scene_number,
+                "description": s.description,
+                "shot_type": s.shot_type,
+                "mood": s.mood,
+                "duration": s.duration,
+                "visual_prompt": s.visual_prompt,
+                "narration": s.narration,
+                "dialogue": s.dialogue,
+                "audio_cues": s.audio_cues,
+            }
+            for s in sorted(project.scenes, key=lambda x: x.scene_number)
+        ],
+        "script": script_content,
+    }
 
 
 @router.get("/agent-status")
-async def get_agent_status():
-    """Get status of all AI agents"""
+def get_agent_status():
+    """Return memory stats for all running orchestrators."""
     return {
         "status": "active",
-        "agents": orchestrator.get_agent_status(),
-        "services": {
-            "ai_generator": "active" if ai_generator.openai_client else "unavailable",
-            "video_generator": "active",
-            "audio_generator": "active" if audio_generator.elevenlabs_client else "unavailable"
-        }
+        "orchestrators": {
+            model: orch.get_agent_status()
+            for model, orch in _orchestrators.items()
+        },
     }
 
 
 @router.post("/clear-memory")
-async def clear_agent_memory():
-    """Clear memory from all agents"""
-    orchestrator.clear_all_memory()
+def clear_agent_memory():
+    """Clear in-memory context from all agents."""
+    for orch in _orchestrators.values():
+        orch.clear_all_memory()
     return {"status": "success", "message": "All agent memories cleared"}
-
-
-@router.get("/voices")
-async def list_voices():
-    """List available ElevenLabs voices"""
-    voices = await audio_generator.list_available_voices()
-    return {"voices": voices, "total": len(voices)}
