@@ -21,7 +21,7 @@ class AgentOrchestrator:
         self.screenwriter = ScreenwriterAgent(model=model, anthropic_api_key=anthropic_api_key)
         self.cinematographer = CinematographerAgent(model=model, anthropic_api_key=anthropic_api_key)
         self.sound_designer = SoundDesignerAgent(model=model, anthropic_api_key=anthropic_api_key)
-        self.editor = EditorAgent(model=model)
+        self.editor = EditorAgent(model=model, anthropic_api_key=anthropic_api_key)
         logger.info("Agent Orchestrator initialised with 5 agents")
 
     @classmethod

@@ -8,9 +8,13 @@ from .base_agent import BaseAgent
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """You are an award-winning film director with decades of experience.
-You craft compelling visual narratives, break stories into dynamic scenes, and give
-each project a distinctive aesthetic identity. Always respond with valid JSON only."""
+# Used for the creative vision statement — plain prose, no JSON required.
+VISION_SYSTEM_PROMPT = """You are an award-winning film director with decades of experience.
+You craft compelling visual narratives and give each project a distinctive aesthetic identity."""
+
+# Used for scene breakdown — must return a JSON array.
+SCENE_SYSTEM_PROMPT = """You are an award-winning film director with decades of experience.
+You break stories into dynamic scenes. Always respond with valid JSON only."""
 
 
 class DirectorAgent(BaseAgent):
@@ -41,7 +45,7 @@ class DirectorAgent(BaseAgent):
             "Write a concise creative vision statement (3-4 sentences) covering tone, "
             "visual aesthetic, pacing, and emotional arc. Return plain text, no JSON."
         )
-        return await self._ask_claude(user_msg, SYSTEM_PROMPT, max_tokens=512)
+        return await self._ask_claude(user_msg, VISION_SYSTEM_PROMPT, max_tokens=512)
 
     async def _break_down_scenes(self, vision: str, prompt: str, duration: int) -> list[Dict[str, Any]]:
         scene_count = max(3, duration // 10)
@@ -55,7 +59,7 @@ class DirectorAgent(BaseAgent):
             "duration (int, seconds), shot_type (wide/medium/close-up/extreme-close-up), "
             "mood (string), visual_prompt (detailed image generation prompt as string)."
         )
-        raw = await self._ask_claude(user_msg, SYSTEM_PROMPT, max_tokens=2048)
+        raw = await self._ask_claude(user_msg, SCENE_SYSTEM_PROMPT, max_tokens=2048)
         try:
             start, end = raw.find("["), raw.rfind("]") + 1
             return json.loads(raw[start:end])

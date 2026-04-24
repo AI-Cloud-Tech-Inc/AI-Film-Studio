@@ -20,6 +20,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 def create_tables() -> None:
     """Create all tables declared in the ORM models."""
+    import app.models  # noqa: F401 — registers models with Base.metadata
     Base.metadata.create_all(bind=engine)
 
 

@@ -8,25 +8,30 @@ from typing import Optional, Dict, Any, List
 
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
+from sqlalchemy import func
+from sqlalchemy.orm import Session, selectinload
 
 from app.agents.orchestrator import AgentOrchestrator
-from app.database import get_db, create_tables
+from app.database import get_db
 from app.models.project import Project, Scene, Script, ProjectStatus
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Lazy singleton — initialised on first request so ANTHROPIC_API_KEY is already loaded.
-_orchestrator: Optional[AgentOrchestrator] = None
+# Cache of orchestrators keyed by model name — avoids re-creating on every request
+# while still honouring per-request model selection.
+_orchestrators: Dict[str, AgentOrchestrator] = {}
 
 
-def _get_orchestrator() -> AgentOrchestrator:
-    global _orchestrator
-    if _orchestrator is None:
-        _orchestrator = AgentOrchestrator.from_settings()
-    return _orchestrator
+def _get_orchestrator(model: str) -> AgentOrchestrator:
+    if model not in _orchestrators:
+        from app.core.config import settings
+        _orchestrators[model] = AgentOrchestrator(
+            model=model,
+            anthropic_api_key=settings.ANTHROPIC_API_KEY,
+        )
+    return _orchestrators[model]
 
 
 # ---------------------------------------------------------------------------
@@ -44,6 +49,7 @@ class FilmResponse(BaseModel):
     status: str
     project_id: str
     message: str
+    persisted: bool = True
     data: Optional[Dict[str, Any]] = None
 
 
@@ -117,9 +123,8 @@ async def create_autonomous_film(request: FilmRequest, db: Session = Depends(get
     Director -> Screenwriter -> Cinematographer -> Sound Designer -> Editor
     """
     logger.info(f"Film creation started: {request.prompt[:60]}...")
-    create_tables()  # idempotent — creates tables only if they don't exist
 
-    orchestrator = _get_orchestrator()
+    orchestrator = _get_orchestrator(request.model)
 
     result = await orchestrator.create_film(
         user_prompt=request.prompt,
@@ -130,12 +135,14 @@ async def create_autonomous_film(request: FilmRequest, db: Session = Depends(get
     if result.get("status") == "error":
         raise HTTPException(status_code=500, detail=result.get("error", "Unknown error"))
 
-    # Persist to DB
+    # Persist to DB; surface a clear flag rather than silently swallowing failures.
+    persisted = True
     try:
         project = _persist_project(db, request, result)
         project_id = project.id
     except Exception as exc:
-        logger.warning(f"DB persistence failed (continuing): {exc}")
+        logger.error(f"DB persistence failed: {exc}")
+        persisted = False
         project_id = str(uuid.uuid4())
 
     director_out = result.get("director", {})
@@ -144,7 +151,9 @@ async def create_autonomous_film(request: FilmRequest, db: Session = Depends(get
     return FilmResponse(
         status="success",
         project_id=project_id,
-        message=f"Film pipeline complete — {len(scenes)} scenes created",
+        persisted=persisted,
+        message=f"Film pipeline complete — {len(scenes)} scenes created"
+        + ("" if persisted else " (warning: DB persistence failed)"),
         data={
             "project_id": project_id,
             "prompt": request.prompt,
@@ -166,9 +175,15 @@ async def create_autonomous_film(request: FilmRequest, db: Session = Depends(get
 @router.get("/projects", response_model=List[Dict[str, Any]])
 def list_projects(skip: int = 0, limit: int = 20, db: Session = Depends(get_db)):
     """List all film projects, newest first."""
-    create_tables()
-    projects = (
-        db.query(Project)
+    # Use a COUNT subquery to avoid the N+1 per-project lazy-load.
+    scene_count_sq = (
+        db.query(func.count(Scene.id))
+        .filter(Scene.project_id == Project.id)
+        .correlate(Project)
+        .scalar_subquery()
+    )
+    rows = (
+        db.query(Project, scene_count_sq.label("scene_count"))
         .order_by(Project.created_at.desc())
         .offset(skip)
         .limit(limit)
@@ -181,18 +196,22 @@ def list_projects(skip: int = 0, limit: int = 20, db: Session = Depends(get_db))
             "style": p.style,
             "duration": p.duration,
             "status": p.status,
-            "scene_count": len(p.scenes),
+            "scene_count": count,
             "created_at": p.created_at.isoformat(),
         }
-        for p in projects
+        for p, count in rows
     ]
 
 
 @router.get("/projects/{project_id}", response_model=Dict[str, Any])
 def get_project(project_id: str, db: Session = Depends(get_db)):
     """Get a single project with all its scenes and script."""
-    create_tables()
-    project = db.query(Project).filter(Project.id == project_id).first()
+    project = (
+        db.query(Project)
+        .options(selectinload(Project.scenes), selectinload(Project.scripts))
+        .filter(Project.id == project_id)
+        .first()
+    )
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
 
@@ -233,16 +252,19 @@ def get_project(project_id: str, db: Session = Depends(get_db)):
 
 @router.get("/agent-status")
 def get_agent_status():
-    """Return memory stats for all agents."""
+    """Return memory stats for all running orchestrators."""
     return {
         "status": "active",
-        "agents": _get_orchestrator().get_agent_status() if _orchestrator else {},
+        "orchestrators": {
+            model: orch.get_agent_status()
+            for model, orch in _orchestrators.items()
+        },
     }
 
 
 @router.post("/clear-memory")
 def clear_agent_memory():
     """Clear in-memory context from all agents."""
-    if _orchestrator:
-        _orchestrator.clear_all_memory()
+    for orch in _orchestrators.values():
+        orch.clear_all_memory()
     return {"status": "success", "message": "All agent memories cleared"}
