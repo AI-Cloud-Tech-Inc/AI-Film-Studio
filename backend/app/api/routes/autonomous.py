@@ -12,6 +12,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, selectinload
 
 from app.agents.orchestrator import AgentOrchestrator
+from app.agents.crew_film_studio import CrewFilmStudio
 from app.database import get_db
 from app.models.project import Project, Scene, Script, ProjectStatus
 
@@ -19,9 +20,9 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Cache of orchestrators keyed by model name — avoids re-creating on every request
-# while still honouring per-request model selection.
+# Caches keyed by model name — avoids re-creating clients on every request.
 _orchestrators: Dict[str, AgentOrchestrator] = {}
+_crew_studios: Dict[str, CrewFilmStudio] = {}
 
 
 def _get_orchestrator(model: str) -> AgentOrchestrator:
@@ -32,6 +33,12 @@ def _get_orchestrator(model: str) -> AgentOrchestrator:
             anthropic_api_key=settings.ANTHROPIC_API_KEY,
         )
     return _orchestrators[model]
+
+
+def _get_crew_studio(model: str) -> CrewFilmStudio:
+    if model not in _crew_studios:
+        _crew_studios[model] = CrewFilmStudio.from_settings(model=model)
+    return _crew_studios[model]
 
 
 # ---------------------------------------------------------------------------
@@ -268,3 +275,66 @@ def clear_agent_memory():
     for orch in _orchestrators.values():
         orch.clear_all_memory()
     return {"status": "success", "message": "All agent memories cleared"}
+
+
+# ---------------------------------------------------------------------------
+# CrewAI pipeline endpoint
+# ---------------------------------------------------------------------------
+
+@router.post("/create-film-crew", response_model=FilmResponse)
+async def create_film_with_crewai(request: FilmRequest, db: Session = Depends(get_db)):
+    """
+    Run the autonomous film pipeline using the CrewAI framework.
+
+    Agents collaborate sequentially — each receives prior agents' outputs as
+    context — mirroring the custom pipeline but using CrewAI's orchestration.
+    Results are persisted to the DB in the same way as /create-film.
+    """
+    logger.info(f"CrewAI film creation started: {request.prompt[:60]}...")
+
+    studio = _get_crew_studio(request.model)
+
+    result = await studio.create_film(
+        prompt=request.prompt,
+        style=request.style,
+        duration=request.duration,
+    )
+
+    if result.get("status") == "error":
+        raise HTTPException(status_code=500, detail=result.get("error", "Unknown error"))
+
+    persisted = True
+    try:
+        project = _persist_project(db, request, result)
+        project_id = project.id
+    except Exception as exc:
+        logger.error(f"CrewAI DB persistence failed: {exc}")
+        persisted = False
+        project_id = str(uuid.uuid4())
+
+    director_out = result.get("director", {})
+    scenes = director_out.get("scenes", [])
+
+    return FilmResponse(
+        status="success",
+        project_id=project_id,
+        persisted=persisted,
+        message=f"CrewAI pipeline complete — {len(scenes)} scenes created"
+        + ("" if persisted else " (warning: DB persistence failed)"),
+        data={
+            "project_id": project_id,
+            "framework": "crewai",
+            "prompt": request.prompt,
+            "style": request.style,
+            "duration": request.duration,
+            "scene_count": len(scenes),
+            "total_duration": sum(s.get("duration", 0) for s in scenes),
+            "director": director_out,
+            "script": result.get("script", {}),
+            "cinematography": result.get("cinematography", {}),
+            "sound": result.get("sound", {}),
+            "media_assets": result.get("media_assets", {}),
+            "final_timeline": result.get("final_timeline", {}),
+            "workflow_steps": result.get("workflow_steps", []),
+        },
+    )
