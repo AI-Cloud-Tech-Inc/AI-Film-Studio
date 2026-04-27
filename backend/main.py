@@ -31,7 +31,9 @@ async def lifespan(app: FastAPI):
     """Application lifespan events"""
     # Startup
     print(f"Starting {settings.APP_NAME}...")
-    create_tables()
+    if settings.DEBUG:
+        # Dev/test convenience — production schema is managed by Alembic migrations.
+        create_tables()
     yield
     # Shutdown
     print("Shutting down AI Film Studio...")

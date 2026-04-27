@@ -20,19 +20,26 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-# Caches keyed by model name — avoids re-creating clients on every request.
-_orchestrators: Dict[str, AgentOrchestrator] = {}
+# Allowlist of valid Claude model IDs — prevents unbounded cache growth and
+# blocks arbitrary model strings from being passed to the Anthropic client.
+VALID_MODELS = {
+    "claude-opus-4-6",
+    "claude-sonnet-4-6",
+    "claude-haiku-4-5",
+}
+
+# CrewFilmStudio is stateless (builds a fresh Crew per call) so it is safe to
+# cache by model.  AgentOrchestrator accumulates per-agent memory, so a new
+# instance is created per request to guarantee cross-request isolation.
 _crew_studios: Dict[str, CrewFilmStudio] = {}
 
 
 def _get_orchestrator(model: str) -> AgentOrchestrator:
-    if model not in _orchestrators:
-        from app.core.config import settings
-        _orchestrators[model] = AgentOrchestrator(
-            model=model,
-            anthropic_api_key=settings.ANTHROPIC_API_KEY,
-        )
-    return _orchestrators[model]
+    from app.core.config import settings
+    return AgentOrchestrator(
+        model=model,
+        anthropic_api_key=settings.ANTHROPIC_API_KEY,
+    )
 
 
 def _get_crew_studio(model: str) -> CrewFilmStudio:
@@ -50,6 +57,14 @@ class FilmRequest(BaseModel):
     style: str = Field(default="cinematic", description="Visual style")
     duration: int = Field(default=30, ge=5, le=300, description="Target duration in seconds")
     model: str = Field(default="claude-opus-4-6", description="Claude model to use")
+
+    def validated_model(self) -> str:
+        if self.model not in VALID_MODELS:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid model '{self.model}'. Must be one of: {sorted(VALID_MODELS)}",
+            )
+        return self.model
 
 
 class FilmResponse(BaseModel):
@@ -130,8 +145,9 @@ async def create_autonomous_film(request: FilmRequest, db: Session = Depends(get
     Director -> Screenwriter -> Cinematographer -> Sound Designer -> Editor
     """
     logger.info(f"Film creation started: {request.prompt[:60]}...")
+    model = request.validated_model()
 
-    orchestrator = _get_orchestrator(request.model)
+    orchestrator = _get_orchestrator(model)
 
     result = await orchestrator.create_film(
         user_prompt=request.prompt,
@@ -149,6 +165,7 @@ async def create_autonomous_film(request: FilmRequest, db: Session = Depends(get
         project_id = project.id
     except Exception as exc:
         logger.error(f"DB persistence failed: {exc}")
+        db.rollback()
         persisted = False
         project_id = str(uuid.uuid4())
 
@@ -259,22 +276,19 @@ def get_project(project_id: str, db: Session = Depends(get_db)):
 
 @router.get("/agent-status")
 def get_agent_status():
-    """Return memory stats for all running orchestrators."""
+    """Return valid models and cached crew studio count."""
     return {
         "status": "active",
-        "orchestrators": {
-            model: orch.get_agent_status()
-            for model, orch in _orchestrators.items()
-        },
+        "valid_models": sorted(VALID_MODELS),
+        "cached_crew_studios": list(_crew_studios.keys()),
     }
 
 
 @router.post("/clear-memory")
 def clear_agent_memory():
-    """Clear in-memory context from all agents."""
-    for orch in _orchestrators.values():
-        orch.clear_all_memory()
-    return {"status": "success", "message": "All agent memories cleared"}
+    """Clear cached CrewAI studios (orchestrators are per-request and stateless)."""
+    _crew_studios.clear()
+    return {"status": "success", "message": "Crew studio cache cleared"}
 
 
 # ---------------------------------------------------------------------------
@@ -291,8 +305,9 @@ async def create_film_with_crewai(request: FilmRequest, db: Session = Depends(ge
     Results are persisted to the DB in the same way as /create-film.
     """
     logger.info(f"CrewAI film creation started: {request.prompt[:60]}...")
+    model = request.validated_model()
 
-    studio = _get_crew_studio(request.model)
+    studio = _get_crew_studio(model)
 
     result = await studio.create_film(
         prompt=request.prompt,
@@ -309,6 +324,7 @@ async def create_film_with_crewai(request: FilmRequest, db: Session = Depends(ge
         project_id = project.id
     except Exception as exc:
         logger.error(f"CrewAI DB persistence failed: {exc}")
+        db.rollback()
         persisted = False
         project_id = str(uuid.uuid4())
 

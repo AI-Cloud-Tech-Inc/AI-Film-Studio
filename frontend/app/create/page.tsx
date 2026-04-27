@@ -123,26 +123,34 @@ function ResultsTabs({ data }: { data: FilmResult }) {
           transition={{ duration: 0.2 }}
         >
           {/* Overview */}
-          {tab === 'overview' && (
-            <div className="space-y-6">
-              {data.director?.vision && (
-                <div className="bg-gray-800 border border-purple-500/30 rounded-xl p-6">
-                  <h4 className="text-sm font-semibold text-purple-400 uppercase tracking-wider mb-3">Director's Vision</h4>
-                  <p className="text-gray-200 leading-relaxed">{data.director.vision}</p>
+          {tab === 'overview' && (() => {
+            const shotByNum = new Map(
+              shotPlans.filter((p: any) => p?.scene_number != null).map((p: any) => [p.scene_number, p])
+            )
+            const audioByNum = new Map(
+              audioPlan.filter((p: any) => p?.scene_number != null).map((p: any) => [p.scene_number, p])
+            )
+            return (
+              <div className="space-y-6">
+                {data.director?.vision && (
+                  <div className="bg-gray-800 border border-purple-500/30 rounded-xl p-6">
+                    <h4 className="text-sm font-semibold text-purple-400 uppercase tracking-wider mb-3">Director's Vision</h4>
+                    <p className="text-gray-200 leading-relaxed">{data.director.vision}</p>
+                  </div>
+                )}
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                  {scenes.map((scene) => (
+                    <SceneCard
+                      key={scene.scene_number}
+                      scene={scene}
+                      shotPlan={shotByNum.get(scene.scene_number)}
+                      audioPlan={audioByNum.get(scene.scene_number)}
+                    />
+                  ))}
                 </div>
-              )}
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {scenes.map((scene, i) => (
-                  <SceneCard
-                    key={scene.scene_number}
-                    scene={scene}
-                    shotPlan={shotPlans[i]}
-                    audioPlan={audioPlan[i]}
-                  />
-                ))}
               </div>
-            </div>
-          )}
+            )
+          })()}
 
           {/* Script */}
           {tab === 'script' && (
@@ -448,14 +456,14 @@ export default function CreateFilm() {
               </label>
               <input
                 type="range"
-                min={10} max={120} step={10}
+                min={10} max={300} step={10}
                 value={formData.duration}
                 onChange={e => setFormData({ ...formData, duration: parseInt(e.target.value) })}
                 disabled={loading}
                 className="w-full accent-purple-500 mt-3"
               />
               <div className="flex justify-between text-xs text-gray-500 mt-1">
-                <span>10s</span><span>120s</span>
+                <span>10s</span><span>300s</span>
               </div>
             </div>
           </div>

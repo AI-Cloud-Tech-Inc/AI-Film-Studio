@@ -136,7 +136,11 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   })
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
-    throw new Error(err.detail ?? 'Request failed')
+    const detail = err.detail
+    const message = Array.isArray(detail)
+      ? detail.map((d: any) => d?.msg ?? JSON.stringify(d)).join('; ')
+      : (typeof detail === 'string' ? detail : JSON.stringify(detail) ?? 'Request failed')
+    throw new Error(message)
   }
   return res.json()
 }
@@ -145,7 +149,11 @@ async function get<T>(path: string): Promise<T> {
   const res = await fetch(`${V1}${path}`)
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }))
-    throw new Error(err.detail ?? 'Request failed')
+    const detail = err.detail
+    const message = Array.isArray(detail)
+      ? detail.map((d: any) => d?.msg ?? JSON.stringify(d)).join('; ')
+      : (typeof detail === 'string' ? detail : JSON.stringify(detail) ?? 'Request failed')
+    throw new Error(message)
   }
   return res.json()
 }
